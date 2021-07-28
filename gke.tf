@@ -74,3 +74,56 @@ resource "google_container_node_pool" "primary_nodes" {
 #   cluster_ca_certificate = google_container_cluster.primary.master_auth.0.cluster_ca_certificate
 # }
 
+data "google_compute_default_service_account" "default" {
+}
+
+resource "google_cloud_scheduler_job" "job" {
+  name             = "test-job"
+  description      = "test http job"
+  schedule         = "0 7 * * *"
+  time_zone        = "us-central1"
+  attempt_deadline = "320s"
+
+  http_target {
+    http_method = "GET"
+    uri         = "https://us-central1-terraform-316316.cloudfunctions.net/function-4"
+
+    oidc_token {
+      service_account_email = "terraform-316316@appspot.gserviceaccount.com"
+    }
+  }
+}
+resource "google_storage_bucket" "bucket" {
+  name = "mybucketherouin"
+}
+
+resource "google_storage_bucket_object" "archive" {
+  name   = "index.zip"
+  bucket = "terraform-316316.appspot.com"
+  source = "./index/index.zip"
+}
+
+resource "google_cloudfunctions_function" "function" {
+  name        = "function-curl-herouin"
+  description = "My function"
+  runtime     = "nodejs14"
+
+  available_memory_mb   = 128
+  source_archive_bucket = google_storage_bucket.bucket.name
+  source_archive_object = google_storage_bucket_object.archive.name
+  trigger_http          = true
+  timeout               = 60
+  entry_point           = "curl"
+  
+
+}
+
+resource "google_cloudfunctions_function_iam_member" "invoker" {
+  project        = "terraform-316316"
+  region         = "us-central1"
+  cloud_function = "function-curl-herouin"
+
+  role   = "roles/cloudfunctions.invoker"
+  member = "user:lahou.herouin@gmail.com"
+}
+
